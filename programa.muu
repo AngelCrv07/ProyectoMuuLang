@@ -1,0 +1,19 @@
+establo
+    vaca i = 0;
+    vaca limite = 3;
+    vaca suma = 0;
+
+    muu "Inicio del bucle para";
+    para vaca j = 0 hasta 3
+        muu "Iteración del para";
+    fin_para
+
+    muu "Inicio del bucle mientras";
+    mientras i < limite
+        suma = suma + i;
+        i = i + 1;
+    fin_mientras
+
+    muu "Suma total:";
+    muu suma;
+fin_establo
