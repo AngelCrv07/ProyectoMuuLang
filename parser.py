@@ -1,11 +1,10 @@
-from interpreter import interpreter
+from nodo import Nodo
 
 
 class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
-        self.interpreter = interpreter()  # Instancia del intérprete
 
     def actual(self):
         return self.tokens[self.pos] if self.pos < len(self.tokens) else ("EOF", "")
@@ -15,45 +14,62 @@ class Parser:
         if tipo == tipo_esperado:
             self.pos += 1
             return valor
-        raise SyntaxError(f"Se esperaba {tipo_esperado}, pero se encontró {tipo} ('{valor}')")
+        else:
+            print(
+                f"Error: Se esperaba {tipo_esperado}, pero se encontró {tipo} ('{valor}'). ¿Olvidaste un punto y coma?")
+            self.pos += 1  # Sigue adelante para intentar continuar el análisis
+            return None
 
     def analizar(self):
-        self.programa()
-        if self.pos < len(self.tokens):
-            tipo, valor = self.actual()
-            raise SyntaxError(f"Tokens inesperados después del fin del programa: {tipo} ('{valor}')")
-        print("Análisis sintáctico completado sin errores.")
-
+        try:
+            arbol = self.programa()
+            print("Análisis completado. Generando árbol sintáctico...")
+            return arbol
+        except Exception as e:
+            print(f"Error: {e}")
+            # Intenta devolver árbol parcial si hay alguno
+            return self.arbol_parcial if hasattr(self, "arbol_parcial") else None
     def programa(self):
         if self.actual()[1] != "establo":
             raise SyntaxError("El programa debe iniciar con 'establo'")
+
         self.coincidir("PALABRA_CLAVE")  # 'establo'
-        self.instrucciones()
+        nodo_programa = Nodo("programa", "establo")  # Nodo raíz del programa
+
+        # Procesa las instrucciones
+        nodo_instrucciones = self.instrucciones()
+        nodo_programa.agregar_hijo(nodo_instrucciones)
+
         if self.actual()[1] != "fin_establo":
             raise SyntaxError("El programa debe finalizar con 'fin_establo'")
         self.coincidir("PALABRA_CLAVE")  # 'fin_establo'
 
+        return nodo_programa
+
     def instrucciones(self):
+        nodo_instrucciones = Nodo("instrucciones", "")
         while self.pos < len(self.tokens):
             tipo, valor = self.actual()
             if valor == "fin_establo":
                 break
-            self.instruccion()
+            nodo_instruccion = self.instruccion()
+            nodo_instrucciones.agregar_hijo(nodo_instruccion)
+        return nodo_instrucciones
 
     def instruccion(self):
         tipo, valor = self.actual()
         if valor == "vaca":
-            self.declaracion()
+            return self.declaracion()
         elif valor == "muu":
-            self.impresion()
+            return self.impresion()
         elif valor == "si":
-            self.condicional()
+            return self.condicional()
         elif valor == "mientras":
-            self.bucle_mientras()
+            return self.bucle_mientras()
         elif valor == "para":
-            self.bucle_para()
+            return self.bucle_para()
         elif tipo == "IDENTIFICADOR":
-            self.asignacion()
+            return self.asignacion()
         else:
             raise SyntaxError(f"Instrucción no válida: '{valor}'")
 
@@ -64,73 +80,45 @@ class Parser:
         valor = self.expresion()
         self.coincidir("DELIMITADOR")  # ;
 
-        # Ejecutar la declaración con el intérprete
-        self.interpreter.ejecutar(("ASIGNACION", (nombre, valor)))
+        nodo_declaracion = Nodo("declaracion", "vaca")
+        nodo_declaracion.agregar_hijo(Nodo("identificador", nombre))
+        nodo_declaracion.agregar_hijo(Nodo("valor", valor))
+        return nodo_declaracion
 
     def asignacion(self):
-        self.coincidir("IDENTIFICADOR")
+        nombre = self.coincidir("IDENTIFICADOR")
         self.coincidir("ASIGNACION")
         valor = self.expresion()
         self.coincidir("DELIMITADOR")  # ;
 
-        # Ejecutar la asignación con el intérprete
-        self.interpreter.ejecutar(("ASIGNACION", (self.tokens[self.pos - 2][1], valor)))
+        nodo_asignacion = Nodo("asignacion", "=")
+        nodo_asignacion.agregar_hijo(Nodo("identificador", nombre))
+        nodo_asignacion.agregar_hijo(Nodo("valor", valor))
+        return nodo_asignacion
 
     def impresion(self):
-        self.coincidir("PALABRA_CLAVE")  # muu
+        self.coincidir("PALABRA_CLAVE")  # 'muu'
         tipo, valor = self.actual()
+        nodo_impresion = Nodo("impresion", "muu")
         if tipo == "CADENA":
-            self.coincidir("DELIMITADOR")  # ;
-            self.interpreter.ejecutar(("IMPRIMIR", valor))
+            nodo_impresion.agregar_hijo(Nodo("cadena", valor))
         elif tipo == "IDENTIFICADOR":
-            # Si es identificador, imprimir el valor de la variable
-            self.coincidir("DELIMITADOR")  # ;
-            valor_variable = self.interpreter.obtener_variable(valor)
-            self.interpreter.ejecutar(("IMPRIMIR", valor_variable))
+            nodo_impresion.agregar_hijo(Nodo("identificador", valor))
+        self.coincidir("DELIMITADOR")  # ;
+        return nodo_impresion
 
     def expresion(self):
         tipo, valor = self.actual()
         if tipo in ["NUMERO", "IDENTIFICADOR"]:
-            self.pos += 1  # Avanzar
+            self.pos += 1
             return valor
         else:
             raise SyntaxError(f"Expresión inválida: se esperaba número o variable, pero se encontró {tipo} ('{valor}')")
 
-        self.pos += 1  # Avanza sobre el primer operando
 
-        while self.actual()[0] == "OPERADOR":
-            self.pos += 1  # Consumir operador
-            tipo2, valor2 = self.actual()
-            if tipo2 not in ["NUMERO", "IDENTIFICADOR"]:
-                raise SyntaxError(
-                    f"Después del operador se esperaba número o variable, pero se encontró {tipo2} ('{valor2}')")
-            self.pos += 1  # Consumir operando
-
-    def bucle_mientras(self):
-        self.coincidir("PALABRA_CLAVE")  # "mientras"
-        self.condicion()  # Condición de la sentencia 'mientras'
-        while self.actual()[1] != "fin_mientras":
-            self.instruccion()
-        self.coincidir("PALABRA_CLAVE")  # 'fin_mientras'
-
-    def condicion(self):
-        self.coincidir("IDENTIFICADOR")
-        self.coincidir("OPERADOR")
-        tipo, _ = self.actual()
-        if tipo not in ["NUMERO", "IDENTIFICADOR"]:
-            raise SyntaxError("Condición inválida: se esperaba número o variable.")
-        self.pos += 1
-
-    def bucle_para(self):
-        self.coincidir("PALABRA_CLAVE")  # para
-        self.coincidir("PALABRA_CLAVE")  # vaca
-        self.coincidir("IDENTIFICADOR")
-        self.coincidir("ASIGNACION")
-        self.expresion()
-        if self.actual()[1] != "hasta":
-            raise SyntaxError("Se esperaba 'hasta' en bucle para.")
-        self.coincidir("PALABRA_CLAVE")  # hasta
-        self.expresion()
-        while self.actual()[1] != "fin_para":
-            self.instruccion()
-        self.coincidir("PALABRA_CLAVE")
+# Función para imprimir el árbol sintáctico
+def imprimir_arbol(nodo, nivel=0):
+    indentacion = "  " * nivel
+    print(f"{indentacion}{nodo.tipo}: {nodo.valor}")
+    for hijo in nodo.hijos:
+        imprimir_arbol(hijo, nivel + 1)

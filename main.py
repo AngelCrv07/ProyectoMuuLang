@@ -1,18 +1,27 @@
-from analizador_lexico import Lexer
+from lexer import Lexer
 from parser import Parser
 
-def main(codigo_fuente):  # <-- ahora recibe el código como argumento
+def main():
     try:
+        # Leer el código fuente desde archivo
+        with open("programa.muu", "r", encoding="utf-8") as archivo:
+            codigo = archivo.read()
+
         # Análisis léxico
-        lexer = Lexer(codigo_fuente)
+        lexer = Lexer(codigo)
         tokens = lexer.analizar()
         lexer.guardar_en_archivo("tokens.txt")  # opcional
 
         # Análisis sintáctico
         parser = Parser(tokens)
-        parser.analizar()
+        arbol = parser.analizar()
 
-        print(" Compilación exitosa. El código es válido sintácticamente.")
+        print("Compilación exitosa. El código es válido sintácticamente.")
+        print("\nÁrbol sintáctico:")
+        imprimir_arbol(arbol)
 
     except Exception as e:
-        print(f" Error: {e}")
+        print(f"Error: {e}")
+
+if __name__ == "__main__":
+    main()
