@@ -27,8 +27,8 @@ class Parser:
             return arbol
         except Exception as e:
             print(f"Error: {e}")
-            # Intenta devolver árbol parcial si hay alguno
             return self.arbol_parcial if hasattr(self, "arbol_parcial") else None
+
     def programa(self):
         if self.actual()[1] != "establo":
             raise SyntaxError("El programa debe iniciar con 'establo'")
@@ -50,14 +50,21 @@ class Parser:
         nodo_instrucciones = Nodo("instrucciones", "")
         while self.pos < len(self.tokens):
             tipo, valor = self.actual()
+
+            # Condición de salida para evitar el bucle infinito
             if valor == "fin_establo":
                 break
+
             nodo_instruccion = self.instruccion()
+            if nodo_instruccion is None:
+                break  # Si la instrucción no es válida, termina el bucle
+
             nodo_instrucciones.agregar_hijo(nodo_instruccion)
         return nodo_instrucciones
 
     def instruccion(self):
         tipo, valor = self.actual()
+
         if valor == "vaca":
             return self.declaracion()
         elif valor == "muu":
@@ -68,6 +75,8 @@ class Parser:
             return self.bucle_mientras()
         elif valor == "para":
             return self.bucle_para()
+        elif valor == "fin_establo":
+            return None  # Fin del programa
         elif tipo == "IDENTIFICADOR":
             return self.asignacion()
         else:
@@ -100,10 +109,17 @@ class Parser:
         self.coincidir("PALABRA_CLAVE")  # 'muu'
         tipo, valor = self.actual()
         nodo_impresion = Nodo("impresion", "muu")
+
         if tipo == "CADENA":
             nodo_impresion.agregar_hijo(Nodo("cadena", valor))
+            self.coincidir("CADENA")
         elif tipo == "IDENTIFICADOR":
             nodo_impresion.agregar_hijo(Nodo("identificador", valor))
+            self.coincidir("IDENTIFICADOR")
+        else:
+            raise SyntaxError(
+                f"Se esperaba una cadena o identificador después de 'muu', pero se encontró {tipo} ('{valor}').")
+
         self.coincidir("DELIMITADOR")  # ;
         return nodo_impresion
 
@@ -115,9 +131,39 @@ class Parser:
         else:
             raise SyntaxError(f"Expresión inválida: se esperaba número o variable, pero se encontró {tipo} ('{valor}')")
 
+    def bucle_para(self):
+        self.coincidir("PALABRA_CLAVE")  # 'para'
+        self.coincidir("PALABRA_CLAVE")  # 'vaca'
+        nombre = self.coincidir("IDENTIFICADOR")
+        self.coincidir("ASIGNACION")
+        inicio = self.expresion()
+        self.coincidir("PALABRA_CLAVE")  # 'hasta'
+        fin = self.expresion()
+        self.coincidir("DELIMITADOR")  # ;
+
+        nodo_bucle_para = Nodo("bucle_para", "para")
+        nodo_bucle_para.agregar_hijo(Nodo("identificador", nombre))
+        nodo_bucle_para.agregar_hijo(Nodo("inicio", inicio))
+        nodo_bucle_para.agregar_hijo(Nodo("fin", fin))
+
+        # Procesar las instrucciones dentro del bucle
+        instrucciones_bucle = self.instrucciones()
+        nodo_bucle_para.agregar_hijo(instrucciones_bucle)
+
+        # Asegurarse de que se ha encontrado 'fin_para'
+        if self.actual()[1] != "fin_para":
+            raise SyntaxError("Se esperaba 'fin_para', pero no se encontró.")
+
+        self.coincidir("PALABRA_CLAVE")  # 'fin_para'
+
+        return nodo_bucle_para
+
 
 # Función para imprimir el árbol sintáctico
 def imprimir_arbol(nodo, nivel=0):
+    if nodo is None:
+        print("  " * nivel + "[Nodo nulo]")
+        return
     indentacion = "  " * nivel
     print(f"{indentacion}{nodo.tipo}: {nodo.valor}")
     for hijo in nodo.hijos:

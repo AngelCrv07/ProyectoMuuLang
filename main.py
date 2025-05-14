@@ -1,5 +1,7 @@
-from lexer import Lexer
+from analizador_lexico import Lexer
 from parser import Parser
+from parser import imprimir_arbol
+
 
 def main():
     try:
